@@ -1,56 +1,78 @@
-version: '3.8'
-
 services:
     postgres:
-        image: postgres:latest
-        container_name: redisCaching-postgres
+        image: postgres:15-alpine
+        container_name: postgres-db
         environment:
-            POSTGRES_USER: admin
-            POSTGRES_PASSWORD: admin
-            POSTGRES_DB: redisCaching
+            POSTGRES_DB: mydatabase
+            POSTGRES_USER: myuser
+            POSTGRES_PASSWORD: secret
         ports:
             - "5432:5432"
         networks:
-            - app-network
+            - kafka-network
 
     redis:
-        image: redis:latest
-        container_name: redis-container
+        image: redis:7-alpine
+        container_name: redis-cache
         ports:
             - "6379:6379"
         networks:
-            - app-network
+            - kafka-network
 
     zookeeper:
-        image: confluentinc/cp-zookeeper:7.5.0
+        image: bitnami/zookeeper:3.9
         container_name: zookeeper
+        environment:
+            ALLOW_ANONYMOUS_LOGIN: yes
         ports:
             - "2181:2181"
-        environment:
-            ZOOKEEPER_CLIENT_PORT: 2181
-            ZOOKEEPER_TICK_TIME: 2000
         networks:
-            - app-network
+            - kafka-network
 
     kafka:
-        image: confluentinc/cp-kafka:7.5.0
+        image: bitnami/kafka:3.6
         container_name: kafka
         depends_on:
             - zookeeper
         ports:
             - "9092:9092"
+            - "9093:9093"
+        networks:
+            - kafka-network
         environment:
             KAFKA_BROKER_ID: 1
             KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-            KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+            KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
             KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-            KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
             ALLOW_PLAINTEXT_LISTENER: yes
+
+    app:
+        build: .
+        container_name: spring-app
+        depends_on:
+            - postgres
+            - redis
+            - kafka
+        ports:
+            - "8080:8080"
+        environment:
+            # Profile
+            - SPRING_PROFILES_ACTIVE=docker
+            # Database
+            - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydatabase
+            - SPRING_DATASOURCE_USERNAME=myuser
+            - SPRING_DATASOURCE_PASSWORD=secret
+            # Redis
+            - SPRING_REDIS_HOST=redis
+            - SPRING_REDIS_PORT=6379
+            # Kafka - Use internal docker network address
+            - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+            - SPRING_KAFKA_CONSUMER_GROUP_ID=user-consumer-group
         networks:
-            - app-network
+            - kafka-network
 
 networks:
-    app-network:
+    kafka-network:
         driver: bridge
