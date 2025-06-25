@@ -4,6 +4,8 @@ import com.edstem.blogapp.dto.PostDTO;
 import com.edstem.blogapp.entity.Post;
 import com.edstem.blogapp.kafka.PostKafkaProducer;
 import com.edstem.blogapp.repository.PostRepository;
+import com.edstem.blogapp.entity.PostDocument;
+import com.edstem.blogapp.repository.PostSearchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -24,6 +26,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final ApplicationEventPublisher publisher;
     private final PostKafkaProducer kafkaProducer;
+    private final PostSearchRepository postSearchRepository; // ✅ Elasticsearch Repository
 
     public PostDTO createPost(PostDTO postDTO) {
         try {
@@ -40,6 +43,16 @@ public class PostService {
 
             // ✅ Publish PostDTO as Kafka message
             kafkaProducer.sendPostCreatedMessage(toDTO(saved));
+
+            // ✅ Index to Elasticsearch
+            PostDocument document = PostDocument.builder()
+                    .id(String.valueOf(saved.getId()))
+                    .title(saved.getTitle())
+                    .content(saved.getContent())
+                    .author(saved.getAuthor())
+                    .build();
+
+            postSearchRepository.save(document);
 
             return toDTO(saved);
         } catch (DataAccessException e) {
@@ -91,6 +104,7 @@ public class PostService {
 
         postRepository.deleteById(id);
         redisTemplate.delete("post:all");
+        postSearchRepository.deleteById(String.valueOf(id)); // ✅ Remove from Elasticsearch
     }
 
     private PostDTO toDTO(Post post) {

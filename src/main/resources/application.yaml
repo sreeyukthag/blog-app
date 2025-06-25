@@ -62,3 +62,5 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:redis}
       port: ${SPRING_REDIS_PORT:6379}
+    elasticsearch:
+      uris: ${SPRING_ELASTICSEARCH_URIS:http://localhost:9200}
