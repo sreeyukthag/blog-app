@@ -13,9 +13,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,8 +38,8 @@ public class PostService {
             // Clear cached list
             redisTemplate.delete("post:all");
 
-            // Publish Kafka message
-            kafkaProducer.sendPostCreatedMessage("New Post Created: " + saved.getTitle());
+            // ✅ Publish PostDTO as Kafka message
+            kafkaProducer.sendPostCreatedMessage(toDTO(saved));
 
             return toDTO(saved);
         } catch (DataAccessException e) {
@@ -74,7 +72,7 @@ public class PostService {
             }
 
             List<Post> posts = postRepository.findAll();
-            redisTemplate.opsForValue().set(key, posts, Duration.ofMinutes(10));
+            redisTemplate.opsForValue().set(key, posts, Duration.ofSeconds(10));
             result = posts.stream().map(this::toDTO).collect(Collectors.toList());
         } catch (Exception e) {
             System.err.println("Redis fetch error, falling back to DB: " + e.getMessage());

@@ -12,14 +12,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
-import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.KafkaAdmin;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -45,52 +42,37 @@ public class KafkaConfig {
     @PostConstruct
     public void logConfiguration() {
         log.info("=== KAFKA CONFIGURATION DEBUG ===");
-        log.info("Bootstrap Servers (resolved): {}", bootstrapServers);
-        log.info("Consumer Group (resolved): {}", groupId);
+        log.info("Bootstrap Servers: {}", bootstrapServers);
+        log.info("Consumer Group: {}", groupId);
         log.info("Active Profile: {}", String.join(",", environment.getActiveProfiles()));
-
-        // Debug environment variables
-        log.info("Spring Properties:");
-        log.info("  spring.kafka.bootstrap-servers: {}", environment.getProperty("spring.kafka.bootstrap-servers"));
-        log.info("  spring.kafka.consumer.group-id: {}", environment.getProperty("spring.kafka.consumer.group-id"));
-
-        // Debug environment variables
-        log.info("Environment Variables:");
-        log.info("  SPRING_KAFKA_BOOTSTRAP_SERVERS: {}", environment.getProperty("SPRING_KAFKA_BOOTSTRAP_SERVERS"));
-        log.info("  SPRING_KAFKA_CONSUMER_GROUP_ID: {}", environment.getProperty("SPRING_KAFKA_CONSUMER_GROUP_ID"));
-        log.info("  SPRING_PROFILES_ACTIVE: {}", environment.getProperty("SPRING_PROFILES_ACTIVE"));
-
         log.info("================================");
     }
 
     @Bean
-    @Primary
     public KafkaAdmin kafkaAdmin() {
-        log.info("Configuring KafkaAdmin with bootstrap servers: {}", bootstrapServers);
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         return new KafkaAdmin(configs);
     }
 
     @Bean
-    public NewTopic userTopic() {
-        return TopicBuilder.name("user-topic")
-                .partitions(5)
+    public NewTopic postTopic() {
+        return TopicBuilder.name("post-events")
+                .partitions(3)
                 .replicas(1)
                 .build();
     }
 
     @Bean
-    public NewTopic userDltTopic() {
-        return TopicBuilder.name("user-topic-dlt")
+    public NewTopic postDltTopic() {
+        return TopicBuilder.name("post-events.DLT")
+                .partitions(3)
                 .replicas(1)
-                .partitions(5)
                 .build();
     }
 
     @Bean
     public ConsumerFactory<String, PostDTO> consumerFactory() {
-        log.info("Creating ConsumerFactory with bootstrap servers: {}", bootstrapServers);
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -106,21 +88,24 @@ public class KafkaConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, PostDTO> kafkaListenerContainerFactory() {
-        var factory = new ConcurrentKafkaListenerContainerFactory<String, PostDTO>();
+        ConcurrentKafkaListenerContainerFactory<String, PostDTO> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(3);
 
-        var errorHandler = new DefaultErrorHandler(
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL); // ✅ important!
+
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 new DeadLetterPublishingRecoverer(kafkaTemplate,
-                        (record, e) -> {
-                            log.info("Message failed due to {}", e.getMessage());
-                            return new TopicPartition("user-topic-dlt", record.partition());
-                        }
-                ),
+                        (record, ex) -> {
+                            log.warn("Redirecting to DLT due to error: {}", ex.getMessage());
+                            return new TopicPartition("post-events.DLT", record.partition());
+                        }),
                 new FixedBackOff(1000L, 2)
         );
 
         factory.setCommonErrorHandler(errorHandler);
         return factory;
     }
+
 }

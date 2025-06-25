@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: blogapp
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: blogapp
+    template:
+        metadata:
+            labels:
+                app: blogapp
+        spec:
+            containers:
+                - name: blogapp
+                  image: sreeyuktha/blogapp:latest
+                  ports:
+                      - containerPort: 8080
+                  env:
+                      - name: SPRING_PROFILES_ACTIVE
+                        value: docker
+                      - name: SPRING_DATASOURCE_URL
+                        value: jdbc:postgresql://postgres:5432/mydatabase
+                      - name: SPRING_DATASOURCE_USERNAME
+                        value: myuser
+                      - name: SPRING_DATASOURCE_PASSWORD
+                        value: secret
+                      - name: SPRING_REDIS_HOST
+                        value: redis
+                      - name: SPRING_REDIS_PORT
+                        value: "6379"
+                      - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+                        value: my-kafka.default.svc.cluster.local:9092
+                      - name: SPRING_KAFKA_CONSUMER_GROUP_ID
+                        value: user-consumer-group
