@@ -4,7 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 
-@Document(indexName = "posts")  // Elasticsearch index name
+@Document(indexName = "posts")
 @Getter
 @Setter
 @Builder

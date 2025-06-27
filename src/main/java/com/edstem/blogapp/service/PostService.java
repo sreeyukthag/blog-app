@@ -26,7 +26,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final ApplicationEventPublisher publisher;
     private final PostKafkaProducer kafkaProducer;
-    private final PostSearchRepository postSearchRepository; // ✅ Elasticsearch Repository
+    private final PostSearchRepository postSearchRepository;
 
     public PostDTO createPost(PostDTO postDTO) {
         try {
@@ -41,10 +41,10 @@ public class PostService {
             // Clear cached list
             redisTemplate.delete("post:all");
 
-            // ✅ Publish PostDTO as Kafka message
+            // Publish PostDTO as Kafka message
             kafkaProducer.sendPostCreatedMessage(toDTO(saved));
 
-            // ✅ Index to Elasticsearch
+            // Index to Elasticsearch
             PostDocument document = PostDocument.builder()
                     .id(String.valueOf(saved.getId()))
                     .title(saved.getTitle())
@@ -104,7 +104,7 @@ public class PostService {
 
         postRepository.deleteById(id);
         redisTemplate.delete("post:all");
-        postSearchRepository.deleteById(String.valueOf(id)); // ✅ Remove from Elasticsearch
+        postSearchRepository.deleteById(String.valueOf(id));
     }
 
     private PostDTO toDTO(Post post) {

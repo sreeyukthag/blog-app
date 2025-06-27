@@ -93,7 +93,7 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(3);
 
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL); // ✅ important!
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 new DeadLetterPublishingRecoverer(kafkaTemplate,
